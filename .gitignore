@@ -1,0 +1,27 @@
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Runtime data
+instance/
+*.db
+*.sqlite
+*.sqlite3
+uploads/
+
+# Local agent and editor state
+.omx/
+.omc/
+.vscode/
+.idea/
+.DS_Store
