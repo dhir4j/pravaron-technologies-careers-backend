@@ -28,7 +28,11 @@ flask --app app:create_app run --debug
 ```
 
 By default the API uses SQLite at `backend/instance/pravaron_careers.sqlite3`.
-For PostgreSQL later, set `DATABASE_URL=postgresql+psycopg://...`.
+For PythonAnywhere PostgreSQL, set:
+
+```text
+DATABASE_URL=postgresql+psycopg://pravaron-careers:<password>@pravaron-5378.postgres.pythonanywhere-services.com:15378/careers
+```
 
 ## Default Dev Admin
 
