@@ -4,11 +4,23 @@ import argparse
 import getpass
 import os
 import sys
+from pathlib import Path
 
 from app import create_app
 from app.auth import ADMIN_ROLES, hash_password, normalize_email, password_is_valid
 from app.extensions import db
 from app.models import User
+
+
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 def prompt_value(label: str, env_key: str, *, secret: bool = False) -> str:
@@ -38,6 +50,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    load_env_file(Path.home() / "mysite" / ".env")
+    load_env_file(Path.home() / ".env")
+    load_env_file(Path(".env"))
+
     args = parse_args()
     email = normalize_email(args.email or prompt_value("Admin email", "ADMIN_EMAIL"))
     if not email:
