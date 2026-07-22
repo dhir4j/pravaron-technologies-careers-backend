@@ -601,6 +601,21 @@ def update_job(job_id: str):
     return jsonify({"job": job_to_dict(job, include_private=True)})
 
 
+@api.delete("/admin/jobs/<job_id>")
+@require_roles(*ADMIN_ROLES)
+def delete_job(job_id: str):
+    job = db.session.get(Job, job_id)
+    if not job:
+        return json_error("Job not found", 404)
+    application_count = Application.query.filter_by(job_id=job.id).count()
+    if application_count:
+        return json_error("Jobs with applications cannot be deleted. Close or archive it instead.", 409)
+    create_audit("job.deleted", "job", job.id, g.user, {"title": job.title, "public_code": job.public_code})
+    db.session.delete(job)
+    db.session.commit()
+    return "", 204
+
+
 @api.post("/admin/jobs/<job_id>/duplicate")
 @require_roles(*ADMIN_ROLES)
 def duplicate_job(job_id: str):

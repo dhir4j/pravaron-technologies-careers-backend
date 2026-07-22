@@ -79,6 +79,50 @@ def test_admin_can_manage_public_job_content_sections(client):
     assert detail.json["job"]["content_sections"][2]["content"] == "Design for least privilege"
 
 
+def test_admin_can_pause_and_delete_job_without_applications(client):
+    login(client, "careers@example.com", "TestAdmin123!")
+    created = client.post(
+        "/api/v1/admin/jobs",
+        json={"title": "Temporary Role", "role_summary": "Short lived role.", "status": "published"},
+    )
+    assert created.status_code == 201, created.json
+    job_id = created.json["job"]["id"]
+
+    paused = client.patch(f"/api/v1/admin/jobs/{job_id}", json={"status": "paused"})
+    assert paused.status_code == 200, paused.json
+    assert paused.json["job"]["status"] == "paused"
+
+    deleted = client.delete(f"/api/v1/admin/jobs/{job_id}")
+    assert deleted.status_code == 204
+    listing = client.get("/api/v1/admin/jobs")
+    assert all(job["id"] != job_id for job in listing.json["jobs"])
+
+
+def test_admin_cannot_delete_job_with_applications(client):
+    client.post(
+        "/api/v1/auth/register",
+        json={"full_name": "Candidate Three", "email": "candidate3@example.com", "password": "Secret123"},
+    )
+    client.post("/api/v1/auth/dev-verify", json={"email": "candidate3@example.com"})
+    login(client, "candidate3@example.com", "Secret123")
+    job = client.get("/api/v1/public/jobs").json["jobs"][0]
+    resume = client.post(
+        "/api/v1/candidate/resumes",
+        data={"resume": (io.BytesIO(b"%PDF-1.4 test resume"), "resume.pdf")},
+        content_type="multipart/form-data",
+    ).json["resume"]
+    applied = client.post(
+        "/api/v1/candidate/applications",
+        json={"job_id": job["id"], "resume_id": resume["id"], "declarations": {"accuracy": True, "privacy": True}},
+    )
+    assert applied.status_code == 201, applied.json
+
+    login(client, "careers@example.com", "TestAdmin123!")
+    deleted = client.delete(f"/api/v1/admin/jobs/{job['id']}")
+    assert deleted.status_code == 409
+    assert "cannot be deleted" in deleted.json["error"]
+
+
 def test_candidate_can_apply_once_and_get_notification(client):
     response = client.post(
         "/api/v1/auth/register",
