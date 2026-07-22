@@ -6,11 +6,6 @@ import os
 import sys
 from pathlib import Path
 
-from app import create_app
-from app.auth import ADMIN_ROLES, hash_password, normalize_email, password_is_valid
-from app.extensions import db
-from app.models import User
-
 
 def load_env_file(path: Path) -> None:
     if not path.exists():
@@ -32,6 +27,8 @@ def prompt_value(label: str, env_key: str, *, secret: bool = False) -> str:
 
 
 def parse_args() -> argparse.Namespace:
+    from app.auth import ADMIN_ROLES
+
     parser = argparse.ArgumentParser(description="Create or update a Pravaron Careers admin user.")
     parser.add_argument("--email", help="Admin email. Defaults to ADMIN_EMAIL or an interactive prompt.")
     parser.add_argument("--full-name", help="Admin full name. Defaults to ADMIN_FULL_NAME or the email local part.")
@@ -53,6 +50,11 @@ def main() -> int:
     load_env_file(Path.home() / "mysite" / ".env")
     load_env_file(Path.home() / ".env")
     load_env_file(Path(".env"))
+
+    from app import create_app
+    from app.auth import hash_password, normalize_email, password_is_valid
+    from app.extensions import db
+    from app.models import User
 
     args = parse_args()
     email = normalize_email(args.email or prompt_value("Admin email", "ADMIN_EMAIL"))

@@ -4,10 +4,6 @@ import getpass
 import os
 from pathlib import Path
 
-from app import create_app
-from app.auth import normalize_email, verify_password
-from app.models import User
-
 
 def load_env_file(path: Path) -> None:
     if not path.exists():
@@ -24,6 +20,10 @@ def main() -> int:
     load_env_file(Path.home() / "mysite" / ".env")
     load_env_file(Path.home() / ".env")
     load_env_file(Path(".env"))
+
+    from app import create_app
+    from app.auth import normalize_email, verify_password
+    from app.models import User
 
     email = normalize_email(os.getenv("ADMIN_EMAIL") or input("Admin email: "))
     password = os.getenv("ADMIN_PASSWORD") or getpass.getpass("Admin password: ")
