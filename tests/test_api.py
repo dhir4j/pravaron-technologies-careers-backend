@@ -3,9 +3,11 @@ from __future__ import annotations
 import io
 
 import pytest
+from sqlalchemy import Text
 
 from app import create_app
 from app.extensions import db
+from app.models import Job
 from app.seed import seed_dev_data
 
 
@@ -77,6 +79,11 @@ def test_admin_can_manage_public_job_content_sections(client):
     assert detail.status_code == 200
     assert detail.json["job"]["public_code"] == job["public_code"]
     assert detail.json["job"]["content_sections"][2]["content"] == "Design for least privilege"
+
+
+def test_job_long_form_requirements_are_text_columns():
+    assert isinstance(Job.__table__.c.education_preference.type, Text)
+    assert isinstance(Job.__table__.c.experience_requirement.type, Text)
 
 
 def test_admin_can_pause_and_delete_job_without_applications(client):
