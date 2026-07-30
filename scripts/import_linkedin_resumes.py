@@ -89,6 +89,10 @@ def existing_linkedin_application_ids() -> set[str]:
     return ids
 
 
+def existing_resume_checksums() -> set[str]:
+    return {checksum for (checksum,) in db.session.query(Resume.checksum_sha256).all() if checksum}
+
+
 def get_or_create_candidate(application_id: str, full_name: str, href: str | None) -> User:
     email = f"linkedin-{application_id.lower()}@{IMPORT_DOMAIN}"
     full_name = (full_name or "LinkedIn Applicant")[:160]
@@ -127,6 +131,7 @@ def import_resumes(root: Path, dry_run: bool = False) -> dict:
         "errors": [],
     }
     seen_linkedin_ids = existing_linkedin_application_ids()
+    seen_resume_checksums = existing_resume_checksums()
     jobs = {job.public_code: job for job in Job.query.filter(Job.public_code.in_(ROLE_JOB_CODES.values())).all()}
 
     for folder in sorted(path for path in root.iterdir() if path.is_dir()):
@@ -146,7 +151,7 @@ def import_resumes(root: Path, dry_run: bool = False) -> dict:
                 checksum = hashlib.sha256(raw).hexdigest()
                 row = rows.get(path.name)
                 application_id = application_id_from_file(path, row, checksum)
-                if application_id in seen_linkedin_ids:
+                if application_id in seen_linkedin_ids or checksum in seen_resume_checksums:
                     stats["skipped_duplicate"] += 1
                     continue
                 full_name = (str(((row or {}).get("applicant") or {}).get("name") or "").strip() or clean_name(path.name))[:160]
@@ -197,6 +202,7 @@ def import_resumes(root: Path, dry_run: bool = False) -> dict:
                 create_or_update_applicant_detail(application)
                 db.session.commit()
                 seen_linkedin_ids.add(application_id)
+                seen_resume_checksums.add(checksum)
                 stats["imported"] += 1
             except Exception as exc:
                 db.session.rollback()

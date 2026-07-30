@@ -1090,10 +1090,8 @@ def send_application_group_email(group_id: str):
 def admin_applications():
     query = Application.query.join(Job).join(User, Application.candidate_id == User.id)
     source = request.args.get("source")
-    if source:
+    if source and source != "all":
         query = query.filter(Application.source == source)
-    else:
-        query = query.filter(Application.source == "email", Application.resume_id.isnot(None))
     if g.user.role not in ADMIN_ROLES:
         assigned_application_ids = [a.application_id for a in ReviewerAssignment.query.filter_by(reviewer_id=g.user.id).all() if a.application_id]
         assigned_job_ids = [a.job_id for a in ReviewerAssignment.query.filter_by(reviewer_id=g.user.id).all() if a.job_id]
@@ -1106,6 +1104,18 @@ def admin_applications():
         like = f"%{request.args['search']}%"
         query = query.filter(or_(User.full_name.ilike(like), User.email.ilike(like), Job.title.ilike(like), Application.id.ilike(like)))
     items = query.order_by(Application.created_at.desc()).all()
+    if request.args.get("unique", "1") != "0":
+        seen_resume_keys = set()
+        unique_items = []
+        for item in items:
+            resume = item.resume
+            key = resume.checksum_sha256 if resume and resume.checksum_sha256 else None
+            if key and key in seen_resume_keys:
+                continue
+            if key:
+                seen_resume_keys.add(key)
+            unique_items.append(item)
+        items = unique_items
     return jsonify({"applications": [application_to_dict(item, include_private=True) for item in items]})
 
 
