@@ -8,7 +8,7 @@ from pathlib import Path
 from flask import Blueprint, Response, current_app, g, jsonify, request, send_file
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
 from .applicant_details import create_or_update_applicant_detail, rebuild_applicant_details
@@ -1088,7 +1088,19 @@ def send_application_group_email(group_id: str):
 @api.get("/admin/applications")
 @require_roles(*REVIEWER_ROLES)
 def admin_applications():
-    query = Application.query.join(Job).join(User, Application.candidate_id == User.id)
+    page = max(1, int(request.args.get("page", 1) or 1))
+    per_page = min(100, max(1, int(request.args.get("per_page", 20) or 20)))
+    unique = request.args.get("unique", "1") != "0"
+    query = (
+        db.session.query(
+            Application.id.label("id"),
+            Application.created_at.label("created_at"),
+            func.coalesce(Resume.checksum_sha256, Application.id).label("resume_key"),
+        )
+        .join(Job, Application.job_id == Job.id)
+        .join(User, Application.candidate_id == User.id)
+        .outerjoin(Resume, Application.resume_id == Resume.id)
+    )
     source = request.args.get("source")
     if source and source != "all":
         query = query.filter(Application.source == source)
@@ -1103,20 +1115,43 @@ def admin_applications():
     if request.args.get("search"):
         like = f"%{request.args['search']}%"
         query = query.filter(or_(User.full_name.ilike(like), User.email.ilike(like), Job.title.ilike(like), Application.id.ilike(like)))
-    items = query.order_by(Application.created_at.desc()).all()
-    if request.args.get("unique", "1") != "0":
-        seen_resume_keys = set()
-        unique_items = []
-        for item in items:
-            resume = item.resume
-            key = resume.checksum_sha256 if resume and resume.checksum_sha256 else None
-            if key and key in seen_resume_keys:
-                continue
-            if key:
-                seen_resume_keys.add(key)
-            unique_items.append(item)
-        items = unique_items
-    return jsonify({"applications": [application_to_dict(item, include_private=True) for item in items]})
+    if unique:
+        ranked = query.add_columns(
+            func.row_number()
+            .over(
+                partition_by=func.coalesce(Resume.checksum_sha256, Application.id),
+                order_by=Application.created_at.desc(),
+            )
+            .label("resume_rank")
+        ).subquery()
+        filtered = db.session.query(ranked.c.id, ranked.c.created_at).filter(ranked.c.resume_rank == 1)
+    else:
+        filtered = query.subquery()
+        filtered = db.session.query(filtered.c.id, filtered.c.created_at)
+    filtered_subquery = filtered.subquery()
+    total = db.session.query(func.count()).select_from(filtered_subquery).scalar() or 0
+    rows = (
+        db.session.query(filtered_subquery.c.id)
+        .order_by(filtered_subquery.c.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    ids = [row.id for row in rows]
+    applications = Application.query.filter(Application.id.in_(ids)).all() if ids else []
+    by_id = {item.id: item for item in applications}
+    items = [by_id[item_id] for item_id in ids if item_id in by_id]
+    return jsonify(
+        {
+            "applications": [application_to_dict(item, include_private=True) for item in items],
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pages": (total + per_page - 1) // per_page if per_page else 0,
+            },
+        }
+    )
 
 
 @api.get("/admin/applications/<application_id>")
