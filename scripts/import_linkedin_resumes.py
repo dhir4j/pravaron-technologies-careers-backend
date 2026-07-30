@@ -35,7 +35,7 @@ def clean_name(value: str) -> str:
     value = re.sub(r"^\d{1,4}-", "", value)
     value = re.sub(r"[_-]+", " ", value)
     value = re.sub(r"\s+", " ", value).strip()
-    return value or "LinkedIn Applicant"
+    return (value or "LinkedIn Applicant")[:160]
 
 
 def manifest_rows(folder: Path) -> dict[str, dict]:
@@ -76,7 +76,7 @@ def linkedin_text(row: dict | None) -> str:
 
 def linkedin_href(row: dict | None) -> str | None:
     value = str(((row or {}).get("applicant") or {}).get("href") or "").strip()
-    return value or None
+    return value[:500] or None
 
 
 def existing_linkedin_application_ids() -> set[str]:
@@ -91,6 +91,7 @@ def existing_linkedin_application_ids() -> set[str]:
 
 def get_or_create_candidate(application_id: str, full_name: str, href: str | None) -> User:
     email = f"linkedin-{application_id.lower()}@{IMPORT_DOMAIN}"
+    full_name = (full_name or "LinkedIn Applicant")[:160]
     user = User.query.filter_by(email=email).first()
     if not user:
         user = User(
@@ -148,7 +149,7 @@ def import_resumes(root: Path, dry_run: bool = False) -> dict:
                 if application_id in seen_linkedin_ids:
                     stats["skipped_duplicate"] += 1
                     continue
-                full_name = str(((row or {}).get("applicant") or {}).get("name") or "").strip() or clean_name(path.name)
+                full_name = (str(((row or {}).get("applicant") or {}).get("name") or "").strip() or clean_name(path.name))[:160]
                 if dry_run:
                     stats["imported"] += 1
                     seen_linkedin_ids.add(application_id)

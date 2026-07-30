@@ -122,6 +122,12 @@ def _find_notice_period(text: str) -> str | None:
     return normalize_resume_text(match.group(1))[:80] if match else None
 
 
+def _limit(value: str | None, max_length: int) -> str | None:
+    if not value:
+        return None
+    return value[:max_length]
+
+
 def parse_resume_fields(text: str, candidate: User, email_info: dict | None = None) -> dict:
     urls = _find_urls(text)
     linkedin = next((url for url in urls if "linkedin.com" in url.lower()), None)
@@ -145,9 +151,9 @@ def parse_resume_fields(text: str, candidate: User, email_info: dict | None = No
         "emails": emails[:10],
         "phones": phones[:10],
         "urls": urls,
-        "linkedin_url": linkedin or (profile.linkedin_url if profile else None),
-        "github_url": github or (profile.github_url if profile else None),
-        "portfolio_url": portfolio or (profile.portfolio_url if profile else None),
+        "linkedin_url": _limit(linkedin or (profile.linkedin_url if profile else None), 500),
+        "github_url": _limit(github or (profile.github_url if profile else None), 500),
+        "portfolio_url": _limit(portfolio or (profile.portfolio_url if profile else None), 500),
         "skills": _find_skills(text),
         "experience_years_detected": max(experience_values) if experience_values else None,
         "detected_location": detected_location,
