@@ -154,18 +154,27 @@ def _get_or_create_candidate(email_address: str, full_name: str) -> User:
         if not user.full_name and full_name:
             user.full_name = full_name
         return user
-    user = User(
-        email=email_address,
-        password_hash=hash_password(uuid.uuid4().hex + "A1"),
-        full_name=full_name,
-        role="candidate",
-        is_verified=True,
-    )
-    user.profile = CandidateProfile(extra_metadata={"source": "email_import"})
-    db.session.add(user)
-    db.session.flush()
-    create_audit("mail_import.candidate_created", "user", user.id, user, {"email": email_address})
-    return user
+    try:
+        with db.session.begin_nested():
+            user = User(
+                email=email_address,
+                password_hash=hash_password(uuid.uuid4().hex + "A1"),
+                full_name=full_name,
+                role="candidate",
+                is_verified=True,
+            )
+            user.profile = CandidateProfile(extra_metadata={"source": "email_import"})
+            db.session.add(user)
+            db.session.flush()
+            create_audit("mail_import.candidate_created", "user", user.id, user, {"email": email_address})
+        return user
+    except IntegrityError:
+        user = User.query.filter_by(email=email_address).first()
+        if not user:
+            raise
+        if not user.full_name and full_name:
+            user.full_name = full_name
+        return user
 
 
 def _general_email_job(actor: User) -> Job:
