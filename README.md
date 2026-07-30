@@ -28,17 +28,13 @@ flask --app app:create_app run --debug
 ```
 
 By default the API uses SQLite at `backend/instance/pravaron_careers.sqlite3`.
-For PythonAnywhere PostgreSQL, set:
+For production PostgreSQL, set `DATABASE_URL` in the deployment environment:
 
 ```text
-DATABASE_URL=postgresql+psycopg://pravaron-careers:<password>@pravaron-5378.postgres.pythonanywhere-services.com:15378/careers
+DATABASE_URL=postgresql+psycopg://<user>:<password>@<host>:<port>/<database>
 ```
 
-## Default Dev Admin
+## Admin Users
 
-`flask --app app:create_app seed-dev` creates:
-
-- Email: `careers@example.com`
-- Password: `TestAdmin123!`
-
-Change this before any production use.
+Create admin users with `create_admin.py`. Keep production credentials in the
+deployment environment only.

@@ -121,6 +121,7 @@ def update_application_status(application: Application, internal_status: str, ac
     )
     db.session.add(event)
     if previous_candidate != candidate_status:
+        # Create in-app notification (legacy)
         create_notification(
             recipient_id=application.candidate_id,
             application_id=application.id,
@@ -128,18 +129,25 @@ def update_application_status(application: Application, internal_status: str, ac
             subject=f"Application status updated: {candidate_status}",
             message=f"Your application for {application.job.title} is now {candidate_status}.",
         )
+        # Send email notification via notification service
+        from .notification_service import send_status_update_notification
+        try:
+            send_status_update_notification(application, previous_candidate, candidate_status)
+        except Exception as e:
+            current_app.logger.error(f"Failed to send status update email: {e}")
     create_audit("application.status_changed", "application", application.id, actor, {"from": previous_internal, "to": internal_status})
 
 
-def save_resume_file(user: User, upload: FileStorage) -> Resume:
-    filename = secure_filename(upload.filename or "")
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+def save_resume_bytes(user: User, filename: str, raw: bytes, content_type: str | None = None) -> Resume:
+    safe_filename = secure_filename(filename or "")
+    ext = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
     if ext not in current_app.config["ALLOWED_RESUME_EXTENSIONS"]:
         raise ValueError("Resume must be a PDF, DOC, or DOCX file")
-
-    raw = upload.read()
     if not raw:
         raise ValueError("Resume file is empty")
+    if len(raw) > current_app.config["MAX_CONTENT_LENGTH"]:
+        raise ValueError("Resume file exceeds the maximum allowed size")
+
     checksum = hashlib.sha256(raw).hexdigest()
     version = db.session.query(Resume).filter_by(user_id=user.id).count() + 1
     folder = Path(current_app.root_path).parent / current_app.config["UPLOAD_FOLDER"] / user.id
@@ -150,15 +158,19 @@ def save_resume_file(user: User, upload: FileStorage) -> Resume:
 
     resume = Resume(
         user_id=user.id,
-        original_filename=filename,
+        original_filename=safe_filename,
         storage_path=os.fspath(storage_path),
-        content_type=upload.mimetype,
+        content_type=content_type,
         size_bytes=len(raw),
         checksum_sha256=checksum,
         version=version,
         scan_status="pending",
     )
     db.session.add(resume)
-    create_audit("resume.uploaded", "resume", resume.id, user, {"filename": filename, "size_bytes": len(raw)})
+    db.session.flush()
+    create_audit("resume.uploaded", "resume", resume.id, user, {"filename": safe_filename, "size_bytes": len(raw)})
     return resume
 
+
+def save_resume_file(user: User, upload: FileStorage) -> Resume:
+    return save_resume_bytes(user, upload.filename or "", upload.read(), upload.mimetype)

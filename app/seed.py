@@ -1,21 +1,24 @@
 from __future__ import annotations
 
+import os
+
 from .auth import hash_password, normalize_email
 from .extensions import db
 from .models import EmailTemplate, Job, User
 
 
 def seed_dev_data() -> None:
-    admin_email = normalize_email("careers@example.com")
+    admin_email = normalize_email(os.getenv("DEV_ADMIN_EMAIL", "admin@example.test"))
+    admin_password = os.getenv("DEV_ADMIN_PASSWORD", "TestAdmin123!")
     admin = User.query.filter_by(email=admin_email).first()
     if not admin:
-        admin = User.query.filter_by(email=normalize_email("admin@pravarontechnologies.com")).first()
+        admin = User.query.filter_by(email=normalize_email("admin@example.test")).first()
         if admin:
             admin.email = admin_email
     if not admin:
         admin = User(
             email=admin_email,
-            password_hash=hash_password("TestAdmin123!"),
+            password_hash=hash_password(admin_password),
             full_name="Pravaron Admin",
             role="super_admin",
             is_verified=True,
