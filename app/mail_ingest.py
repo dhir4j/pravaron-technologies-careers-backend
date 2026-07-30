@@ -17,7 +17,7 @@ from .applicant_details import create_or_update_applicant_detail
 from .auth import hash_password, normalize_email
 from .extensions import db
 from .models import Application, ApplicationEvent, CandidateProfile, InternalNote, Job, User
-from .services import create_audit, save_resume_bytes, slugify
+from .services import create_audit, resume_page_count, save_resume_bytes, slugify
 
 APPLICATION_KEYWORDS = {
     "application",
@@ -310,6 +310,7 @@ def _import_message(message: EmailMessage, uid: bytes, actor: User, seen_message
                 "filename": resume.original_filename,
                 "content_type": resume.content_type,
                 "size_bytes": resume.size_bytes,
+                "page_count": resume_page_count(resume),
             }
         )
         primary_resume_id = primary_resume_id or resume.id

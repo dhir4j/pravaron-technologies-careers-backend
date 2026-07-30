@@ -9,6 +9,7 @@ from .models import (
     CandidateProfile, InconsistencyFlag, Interview, InterviewFeedback,
     Job, Notification, OfferLetter, ProctoringEvent, ProctoringSession, Resume, User,
 )
+from .services import resume_page_count
 
 
 def iso(value):
@@ -99,10 +100,32 @@ def resume_to_dict(resume: Resume) -> dict:
         "content_type": resume.content_type,
         "size_bytes": resume.size_bytes,
         "checksum_sha256": resume.checksum_sha256,
+        "page_count": resume_page_count(resume),
         "version": resume.version,
         "scan_status": resume.scan_status,
         "created_at": iso(resume.created_at),
     }
+
+
+def email_info_to_dict(email_info: dict | None) -> dict | None:
+    if not isinstance(email_info, dict):
+        return None
+    data = dict(email_info)
+    attachments = data.get("attachments")
+    if isinstance(attachments, list):
+        enriched = []
+        for attachment in attachments:
+            if not isinstance(attachment, dict):
+                enriched.append(attachment)
+                continue
+            item = dict(attachment)
+            if item.get("page_count") is None and item.get("resume_id"):
+                resume = Resume.query.get(item["resume_id"])
+                if resume:
+                    item["page_count"] = resume_page_count(resume)
+            enriched.append(item)
+        data["attachments"] = enriched
+    return data
 
 
 def applicant_detail_to_dict(detail: ApplicantDetail | None, include_resume_text: bool = False) -> dict | None:
@@ -200,7 +223,7 @@ def application_to_dict(application: Application, include_private: bool = False,
                 "declarations": application.declarations or {},
                 "rejection_reason": application.rejection_reason,
                 "withdrawal_reason": application.withdrawal_reason,
-                "email": email_info if isinstance(email_info, dict) else None,
+                "email": email_info_to_dict(email_info),
                 "applicant_detail": applicant_detail_to_dict(application.applicant_detail, include_resume_text=include_applicant_detail_text),
                 "candidate_analysis": candidate_analysis_to_dict(application.candidate_analysis),
             }

@@ -174,3 +174,17 @@ def save_resume_bytes(user: User, filename: str, raw: bytes, content_type: str |
 
 def save_resume_file(user: User, upload: FileStorage) -> Resume:
     return save_resume_bytes(user, upload.filename or "", upload.read(), upload.mimetype)
+
+
+def resume_page_count(resume: Resume) -> int | None:
+    if not (resume.content_type == "application/pdf" or resume.original_filename.lower().endswith(".pdf")):
+        return None
+    path = Path(resume.storage_path)
+    if not path.exists():
+        return None
+    try:
+        from pypdf import PdfReader
+
+        return len(PdfReader(os.fspath(path)).pages)
+    except Exception:
+        return None
