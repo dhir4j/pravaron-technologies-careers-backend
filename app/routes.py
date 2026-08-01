@@ -447,10 +447,11 @@ def download_resume(resume_id: str):
     path = Path(resume.storage_path)
     if not path.exists():
         return json_error("Resume file is missing", 404)
+    inline = request.args.get("disposition") == "inline"
     return send_file(
         path,
         mimetype=resume.content_type or "application/octet-stream",
-        as_attachment=True,
+        as_attachment=not inline,
         download_name=resume.original_filename,
     )
 
