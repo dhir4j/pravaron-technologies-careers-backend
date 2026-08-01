@@ -844,6 +844,25 @@ def duplicate_job(job_id: str):
 @require_roles(*ADMIN_ROLES)
 def admin_analyze_applications():
     data = payload()
+    application_ids = _dedupe_ids(data.get("application_ids") or [])
+    if application_ids:
+        applications = _load_group_applications(application_ids)
+        summary = {"checked": 0, "analyzed": 0, "cached": 0, "failed": 0, "errors": [], "analysis_ids": []}
+        for application in applications:
+            summary["checked"] += 1
+            try:
+                analysis, created = analyze_application(application, force=bool(data.get("force")))
+                db.session.commit()
+                if created:
+                    summary["analyzed"] += 1
+                else:
+                    summary["cached"] += 1
+                summary["analysis_ids"].append(analysis.id)
+            except Exception as exc:
+                db.session.rollback()
+                summary["failed"] += 1
+                summary["errors"].append({"application_id": application.id, "error": str(exc)[:500]})
+        return jsonify({"analysis": summary})
     raw_limit = data.get("limit")
     try:
         limit = int(raw_limit) if raw_limit else None
@@ -901,6 +920,126 @@ def _render_group_email(subject: str, text_body: str, html_body: str, applicatio
     rendered_html = rendered_html_content if "<html" in rendered_html_content.lower() else EMAIL_BASE_TEMPLATE.format(content=rendered_html_content.replace("\n", "<br />"))
     return rendered_subject, rendered_text, rendered_html
 
+
+DECISION_EMAIL_DEFAULTS = {
+    "Rejected": {
+        "template_key": "application_rejection",
+        "subject": "Update on your application for {{job_title}}",
+        "text_body": """Hi {{candidate_name}},
+
+Thank you for taking the time to apply for {{job_title}} at Pravaron Technologies.
+
+After reviewing your application, we will not be moving forward with your profile for this role at this stage.
+
+This decision does not reflect your overall potential. Hiring needs can be specific to timing, role fit, and current team requirements, and we would be glad to consider your profile again for future openings that match your experience.
+
+You can continue to track new roles here:
+{{application_url}}
+
+Regards,
+Pravaron Technologies Careers Team
+""",
+        "html_body": """<h2>Application update</h2>
+<p>Hi {{candidate_name}},</p>
+<p>Thank you for taking the time to apply for <strong>{{job_title}}</strong> at Pravaron Technologies.</p>
+<p>After reviewing your application, we will not be moving forward with your profile for this role at this stage.</p>
+<div class="info-box">This decision does not reflect your overall potential. Hiring needs can be specific to timing, role fit, and current team requirements, and we would be glad to consider your profile again for future openings that match your experience.</div>
+<p>You can continue to track new roles and future openings through the careers portal.</p>
+<p><a class="button" href="{{application_url}}">Open careers portal</a></p>
+<p>Regards,<br />Pravaron Technologies Careers Team</p>""",
+    },
+    "Shortlisted": {
+        "template_key": "application_shortlisted",
+        "subject": "You Have Been Shortlisted for the Next Stage",
+        "text_body": """Dear {{candidate_name}},
+
+Thank you for applying for the {{job_title}} position at Pravaron Technologies.
+
+We are pleased to inform you that your application has been shortlisted for the next stage of our hiring process.
+
+The upcoming selection rounds may include:
+
+Aptitude assessment
+Role-specific technical assessment
+Coding or practical assignment
+Technical interview
+Final discussion
+
+You will receive a separate email with the assessment schedule, instructions, duration, and access details.
+
+Please continue to monitor your registered email address for further updates.
+
+We appreciate your interest in joining Pravaron Technologies and wish you the best for the upcoming rounds.
+
+Regards,
+HR,
+Pravaron Technologies
+careers@pravarontechnologies.com
+""",
+        "html_body": """<h2>You have been shortlisted</h2>
+<p>Dear {{candidate_name}},</p>
+<p>Thank you for applying for the <strong>{{job_title}}</strong> position at Pravaron Technologies.</p>
+<p>We are pleased to inform you that your application has been shortlisted for the next stage of our hiring process.</p>
+<div class="info-box">
+<strong>The upcoming selection rounds may include:</strong><br />
+Aptitude assessment<br />
+Role-specific technical assessment<br />
+Coding or practical assignment<br />
+Technical interview<br />
+Final discussion
+</div>
+<p>You will receive a separate email with the assessment schedule, instructions, duration, and access details.</p>
+<p>Please continue to monitor your registered email address for further updates.</p>
+<p>We appreciate your interest in joining Pravaron Technologies and wish you the best for the upcoming rounds.</p>
+<p>Regards,<br />HR,<br />Pravaron Technologies<br /><a href="mailto:careers@pravarontechnologies.com">careers@pravarontechnologies.com</a></p>""",
+    },
+}
+
+
+def _decision_email_content(application: Application, internal_status: str) -> dict:
+    defaults = DECISION_EMAIL_DEFAULTS[internal_status]
+    template = EmailTemplate.query.filter_by(key=defaults["template_key"], is_active=True).first()
+    subject = template.subject if template else defaults["subject"]
+    text_body = template.text_body if template else defaults["text_body"]
+    html_body = template.html_body if template else defaults["html_body"]
+    rendered_subject, rendered_text, rendered_html = _render_group_email(subject, text_body, html_body, application, internal_status, None)
+    return {
+        "template_key": defaults["template_key"],
+        "subject": rendered_subject,
+        "text_body": rendered_text,
+        "html_body": rendered_html,
+        "to_email": application.candidate.email if application.candidate else "",
+        "candidate_name": application.candidate.full_name if application.candidate else "Candidate",
+        "job_title": application.job.title if application.job else "the role",
+    }
+
+
+def _apply_decision_status(application: Application, internal_status: str, note: str | None, rejection_reason: str | None) -> None:
+    previous_candidate = application.candidate_status
+    previous_internal = application.internal_status
+    candidate_status = STATUS_MAP.get(internal_status, internal_status)
+    application.internal_status = internal_status
+    application.candidate_status = candidate_status
+    application.rejection_reason = rejection_reason
+    db.session.add(
+        ApplicationEvent(
+            application_id=application.id,
+            actor_id=g.user.id,
+            event_type="status_changed",
+            previous_status=previous_internal,
+            new_status=internal_status,
+            note=note,
+            visible_to_candidate=previous_candidate != candidate_status,
+        )
+    )
+    create_notification(
+        recipient_id=application.candidate_id,
+        application_id=application.id,
+        notification_type="application_status_changed",
+        subject=f"Application status updated: {candidate_status}",
+        message=f"Your application for {application.job.title} is now {candidate_status}.",
+    )
+    create_audit("application.status_changed", "application", application.id, g.user, {"from": previous_internal, "to": internal_status, "source": "decision_email"})
 
 
 def _apply_batch_status(application: Application, internal_status: str, note: str) -> None:
@@ -1212,6 +1351,59 @@ def admin_update_application_status(application_id: str):
     update_application_status(application, data["internal_status"], g.user, data.get("note"), data.get("rejection_reason"))
     db.session.commit()
     return jsonify({"application": application_to_dict(application, include_private=True)})
+
+
+@api.get("/admin/applications/<application_id>/decision-email")
+@require_roles(*ADMIN_ROLES)
+def admin_decision_email_preview(application_id: str):
+    application = db.session.get(Application, application_id)
+    if not application:
+        return json_error("Application not found", 404)
+    internal_status = request.args.get("internal_status") or ""
+    if internal_status not in DECISION_EMAIL_DEFAULTS:
+        return json_error("Unsupported decision status")
+    return jsonify({"email": _decision_email_content(application, internal_status)})
+
+
+@api.post("/admin/applications/<application_id>/decision-email")
+@require_roles(*ADMIN_ROLES)
+def admin_send_decision_email(application_id: str):
+    application = db.session.get(Application, application_id)
+    if not application:
+        return json_error("Application not found", 404)
+    data = payload()
+    internal_status = data.get("internal_status") or ""
+    if internal_status not in DECISION_EMAIL_DEFAULTS:
+        return json_error("Unsupported decision status")
+    candidate = application.candidate
+    if not candidate or not candidate.email:
+        return json_error("Candidate email is missing")
+    subject = str(data.get("subject") or "").strip()
+    text_body = str(data.get("text_body") or "").strip()
+    html_body = str(data.get("html_body") or "").strip()
+    if not subject or not (text_body or html_body):
+        return json_error("Subject and email body are required")
+    rendered_html = html_body if "<html" in html_body.lower() else EMAIL_BASE_TEMPLATE.format(content=html_body.replace("\n", "<br />"))
+    ok = send_email(candidate.email, subject, rendered_html, text_body or html_body)
+    if not ok:
+        return json_error("Email send failed", 502)
+    _apply_decision_status(
+        application,
+        internal_status,
+        data.get("note") or f"{internal_status} email sent to candidate.",
+        data.get("rejection_reason") if internal_status == "Rejected" else None,
+    )
+    db.session.add(
+        ApplicationEvent(
+            application_id=application.id,
+            actor_id=g.user.id,
+            event_type="decision_email_sent",
+            note=f"{internal_status} email sent to {candidate.email}.",
+            visible_to_candidate=False,
+        )
+    )
+    db.session.commit()
+    return jsonify({"application": application_to_dict(application, include_private=True), "email_sent": True})
 
 
 @api.post("/admin/applications/<application_id>/notes")
