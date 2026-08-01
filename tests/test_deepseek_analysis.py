@@ -2,7 +2,8 @@
 
 from types import SimpleNamespace
 
-from app.deepseek_analysis import _deterministic_candidate_score, _normalized_job_requirements, _validate_candidate_analysis
+from app import create_app
+from app.deepseek_analysis import _deterministic_candidate_score, _post_deepseek, _normalized_job_requirements, _validate_candidate_analysis
 
 
 def _job():
@@ -140,3 +141,26 @@ def test_evidence_matrix_drives_score_and_track_without_graduation_year_shortcut
     assert result["score"] >= 55
     assert result["recommended_track"] == "Full-time"
     assert result["breakdown"]["location_preference"]["max"] == 3
+
+
+def test_post_deepseek_returns_invalid_marker_for_malformed_json(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"choices":[{"message":{"content":"{\\"candidate_facts\\": {},\\"requirement_analysis\\": ["}}],"usage":{"completion_tokens":4096}}'
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: Response())
+
+    test_app = create_app("testing")
+    with test_app.app_context():
+        test_app.config["DEEPSEEK_API_KEY"] = "test-key"
+        raw, usage = _post_deepseek([], max_tokens=4096)
+
+    assert "_invalid_json_content" in raw
+    assert "Expecting" in raw["_invalid_json_error"]
+    assert usage["completion_tokens"] == 4096

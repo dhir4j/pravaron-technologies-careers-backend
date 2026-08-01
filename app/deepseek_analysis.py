@@ -22,6 +22,7 @@ VALID_REQUIREMENT_STATUSES = {"matched", "partially_matched", "not_found", "cont
 VALID_EVIDENCE_STRENGTHS = {"strong", "moderate", "weak", "none"}
 VALID_CONFIDENCE_VALUES = {"high", "medium", "low", "unknown"}
 VALID_COMPARISON_STATUSES = {"consistent", "explainable_difference", "unclear", "contradictory"}
+DEEPSEEK_ANALYSIS_MAX_OUTPUT_TOKENS = 4096
 
 
 ANALYSIS_SCHEMA_HINT = {
@@ -505,16 +506,22 @@ def _post_deepseek(messages: list[dict], max_tokens: int) -> tuple[dict, dict]:
         error_body = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"DeepSeek API error {exc.code}: {error_body[:500]}") from exc
     content = response_data["choices"][0]["message"].get("content") or "{}"
-    return _extract_json(content), response_data.get("usage") or {}
+    try:
+        return _extract_json(content), response_data.get("usage") or {}
+    except json.JSONDecodeError as exc:
+        return {
+            "_invalid_json_content": content[:12000],
+            "_invalid_json_error": str(exc),
+        }, response_data.get("usage") or {}
 
 
 def _call_deepseek(payload: dict) -> tuple[dict, dict]:
-    raw, usage = _post_deepseek(_analysis_messages(payload), max_tokens=2200)
+    raw, usage = _post_deepseek(_analysis_messages(payload), max_tokens=DEEPSEEK_ANALYSIS_MAX_OUTPUT_TOKENS)
     normalized, errors = _validate_candidate_analysis(raw)
     if not errors:
         return normalized, usage
 
-    retry_raw, retry_usage = _post_deepseek(_analysis_messages(payload, raw, errors), max_tokens=2200)
+    retry_raw, retry_usage = _post_deepseek(_analysis_messages(payload, raw, errors), max_tokens=DEEPSEEK_ANALYSIS_MAX_OUTPUT_TOKENS)
     retry_normalized, retry_errors = _validate_candidate_analysis(retry_raw)
     usage = {"attempts": [usage, retry_usage]}
     if retry_errors:
