@@ -136,7 +136,7 @@ def get_email_template_variables(user, application=None, job=None, interview=Non
         "candidate_email": user.email,
         "company_name": "Pravaron Technologies",
         "careers_url": os.getenv("CAREERS_PUBLIC_URL", "https://careers.pravarontechnologies.com"),
-        "support_email": "careers@example.com",
+        "support_email": "careers@pravarontechnologies.com",
     }
 
     if application:
@@ -178,24 +178,29 @@ EMAIL_BASE_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #151515; margin: 0; padding: 0; background-color: #f5f5f4; }}
-        .email-container {{ max-width: 600px; margin: 0 auto; background-color: #ffffff; }}
-        .email-header {{ background-color: #d72a21; color: #ffffff; padding: 32px 24px; text-align: center; }}
-        .email-header h1 {{ margin: 0; font-size: 24px; font-weight: 700; }}
-        .email-body {{ padding: 32px 24px; }}
-        .email-body h2 {{ font-size: 20px; margin-top: 0; color: #151515; }}
-        .email-body p {{ margin: 16px 0; color: #282828; }}
-        .button {{ display: inline-block; padding: 14px 28px; background-color: #d72a21; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 700; margin: 24px 0; }}
-        .info-box {{ background-color: #f5f5f4; border-left: 4px solid #d72a21; padding: 16px; margin: 24px 0; }}
-        .footer {{ background-color: #171717; color: rgba(255,255,255,0.7); padding: 24px; text-align: center; font-size: 12px; }}
-        .footer a {{ color: rgba(255,255,255,0.9); text-decoration: none; }}
-        .divider {{ border-top: 1px solid #ededeb; margin: 24px 0; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.65; color: #151515; margin: 0; padding: 0; background-color: #f4f1ee; }}
+        .email-container {{ max-width: 680px; margin: 0 auto; background-color: #ffffff; border: 1px solid #ebe5df; }}
+        .email-header {{ background-color: #ffffff; color: #151515; padding: 34px 34px 24px; border-bottom: 4px solid #d72a21; }}
+        .email-header span {{ color: #d72a21; font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }}
+        .email-header h1 {{ margin: 8px 0 0; font-size: 24px; line-height: 1.15; font-weight: 800; }}
+        .email-body {{ padding: 34px; }}
+        .email-body h2 {{ font-size: 22px; margin: 0 0 18px; color: #151515; }}
+        .email-body p {{ margin: 15px 0; color: #282828; }}
+        .email-body ul {{ margin: 16px 0; padding-left: 22px; color: #282828; }}
+        .button {{ display: inline-block; padding: 13px 22px; background-color: #d72a21; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 800; margin: 20px 0; }}
+        .info-box {{ background-color: #fff7f6; border: 1px solid #f1cbc7; border-left: 4px solid #d72a21; border-radius: 6px; padding: 18px 20px; margin: 22px 0; }}
+        .footer {{ background-color: #fbfaf8; color: #686868; padding: 26px 34px; border-top: 1px solid #ebe5df; font-size: 12px; }}
+        .footer p {{ margin: 6px 0; }}
+        .footer strong {{ color: #151515; }}
+        .footer a {{ color: #d72a21; text-decoration: none; font-weight: 700; }}
+        .divider {{ border-top: 1px solid #ebe5df; margin: 22px 0; }}
     </style>
 </head>
 <body>
     <div class="email-container">
         <div class="email-header">
-            <h1>Pravaron Careers</h1>
+            <span>Pravaron Careers</span>
+            <h1>Pravaron Technologies</h1>
         </div>
         <div class="email-body">
             {content}
@@ -203,7 +208,7 @@ EMAIL_BASE_TEMPLATE = """
         <div class="footer">
             <p><strong>Pravaron Technologies</strong></p>
             <p>O-621, Block-A, EON Fairfox, Sector-140A, Noida</p>
-            <p><a href="mailto:careers@example.com">careers@example.com</a></p>
+            <p><a href="mailto:careers@pravarontechnologies.com">careers@pravarontechnologies.com</a></p>
             <div class="divider"></div>
             <p>© 2026 Pravaron Technologies Pvt. Ltd. · Noida, India</p>
         </div>
@@ -407,7 +412,7 @@ def get_ai_interview_invitation_email(user, application, job, interview_id: str,
             <li>Keep the interview code private. It is required to open your interview.</li>
         </ul>
 
-        <p style="color: #686868; font-size: 13px;">Questions? Contact us at <a href="mailto:careers@example.com">careers@example.com</a>.</p>
+        <p style="color: #686868; font-size: 13px;">Questions? Contact us at <a href="mailto:careers@pravarontechnologies.com">careers@pravarontechnologies.com</a>.</p>
     """
 
     html_body = EMAIL_BASE_TEMPLATE.format(content=content)

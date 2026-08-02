@@ -57,8 +57,8 @@ class Config:
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "instance/uploads")
     ALLOWED_RESUME_EXTENSIONS = {"pdf", "docx", "doc"}
 
-    EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS", "careers@example.com")
-    EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", "careers@example.com")
+    EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS", "careers@pravarontechnologies.com")
+    EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", "careers@pravarontechnologies.com")
     CAREERS_CATALOG_OWNER_EMAIL = os.getenv("CAREERS_CATALOG_OWNER_EMAIL", EMAIL_FROM_ADDRESS)
     CAREERS_MAIL_IMAP_HOST = os.getenv("CAREERS_MAIL_IMAP_HOST", "imappro.zoho.in")
     CAREERS_MAIL_IMAP_PORT = int(os.getenv("CAREERS_MAIL_IMAP_PORT", "993"))
