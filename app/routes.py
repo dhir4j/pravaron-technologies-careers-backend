@@ -1014,6 +1014,10 @@ def _decision_email_content(application: Application, internal_status: str) -> d
     }
 
 
+def _valid_decision_email(value: str) -> bool:
+    return bool(value and "@" in value and "." in value.rsplit("@", 1)[-1] and " " not in value)
+
+
 def _apply_decision_status(application: Application, internal_status: str, note: str | None, rejection_reason: str | None) -> None:
     previous_candidate = application.candidate_status
     previous_internal = application.internal_status
@@ -1376,15 +1380,19 @@ def admin_send_decision_email(application_id: str):
     if internal_status not in DECISION_EMAIL_DEFAULTS:
         return json_error("Unsupported decision status")
     candidate = application.candidate
-    if not candidate or not candidate.email:
-        return json_error("Candidate email is missing")
+    default_email = candidate.email if candidate else ""
+    recipient_email = normalize_email(data.get("to_email") or default_email)
+    if not recipient_email:
+        return json_error("Recipient email is missing")
+    if not _valid_decision_email(recipient_email):
+        return json_error("Enter a valid recipient email address")
     subject = str(data.get("subject") or "").strip()
     text_body = str(data.get("text_body") or "").strip()
     html_body = str(data.get("html_body") or "").strip()
     if not subject or not (text_body or html_body):
         return json_error("Subject and email body are required")
     rendered_html = html_body if "<html" in html_body.lower() else EMAIL_BASE_TEMPLATE.format(content=html_body.replace("\n", "<br />"))
-    ok = send_email(candidate.email, subject, rendered_html, text_body or html_body)
+    ok = send_email(recipient_email, subject, rendered_html, text_body or html_body)
     if not ok:
         return json_error("Email send failed", 502)
     _apply_decision_status(
@@ -1398,7 +1406,7 @@ def admin_send_decision_email(application_id: str):
             application_id=application.id,
             actor_id=g.user.id,
             event_type="decision_email_sent",
-            note=f"{internal_status} email sent to {candidate.email}.",
+            note=f"{internal_status} email sent to {recipient_email}.",
             visible_to_candidate=False,
         )
     )
